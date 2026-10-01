@@ -2,6 +2,7 @@
 
 import {
   ArchiveIcon,
+  CaretRightIcon,
   ChatCircleDotsIcon,
   CheckSquareOffsetIcon,
   CopySimpleIcon,
@@ -241,9 +242,26 @@ export function Sidebar({
         </nav>
 
         <div className="mt-6 flex items-center justify-between px-5 pb-1">
-          <span id="sidebar-workspaces" className="text-[12px] font-medium text-subtle">
-            Workspaces
-          </span>
+          {/* The heading opens the Workspaces page: every workspace you're in, with counts. */}
+          <Tooltip content="See all your workspaces" side="right">
+            <Link
+              id="sidebar-workspaces"
+              href="/workspaces"
+              aria-current={pathname === "/workspaces" ? "page" : undefined}
+              className={cn(
+                "group/ws -ml-1.5 inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-[12px] font-medium hover:bg-surface-2 hover:text-text",
+                pathname === "/workspaces" ? "text-text" : "text-subtle",
+              )}
+            >
+              Workspaces
+              <CaretRightIcon
+                size={10}
+                weight="bold"
+                aria-hidden
+                className="opacity-0 transition-opacity group-hover/ws:opacity-100 group-focus-visible/ws:opacity-100 pointer-coarse:opacity-100"
+              />
+            </Link>
+          </Tooltip>
           <Tooltip content="New workspace" side="right">
             <button
               type="button"
