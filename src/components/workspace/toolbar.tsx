@@ -6,6 +6,7 @@ import {
   CopyIcon,
   CopySimpleIcon,
   DotsThreeIcon,
+  EnvelopeSimpleIcon,
   FadersHorizontalIcon,
   FileArrowUpIcon,
   HeartbeatIcon,
@@ -24,6 +25,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { perform, useApp, useTaskNavigation } from "@/components/app-context";
 import { DuePicker, PeoplePicker } from "@/components/pickers";
 import { RepeatPicker } from "@/components/repeat-picker";
@@ -69,7 +71,15 @@ export function WorkspaceToolbar({
   members,
   lists,
 }: {
-  workspace: { id: string; name: string; color: string; isTemplate: boolean; canManage: boolean };
+  workspace: {
+    id: string;
+    name: string;
+    color: string;
+    isTemplate: boolean;
+    canManage: boolean;
+    /** Its email-in address, when a mailbox is connected. */
+    emailAddress: string | null;
+  };
   view: "list" | "board" | "gantt";
   show: "open" | "all" | "closed";
   assignee: string;
@@ -304,6 +314,23 @@ export function WorkspaceToolbar({
             <FileArrowUpIcon size={16} />
             Import tasks from CSV
           </MenuItem>
+          {workspace.emailAddress && (
+            <MenuItem
+              onSelect={async () => {
+                try {
+                  await navigator.clipboard.writeText(workspace.emailAddress!);
+                  toast.success("Email address copied", {
+                    description: "Emails sent to it become tasks here.",
+                  });
+                } catch {
+                  router.push(`/w/${workspaceId}/settings`);
+                }
+              }}
+            >
+              <EnvelopeSimpleIcon size={16} />
+              Copy email address
+            </MenuItem>
+          )}
           <MenuItem onSelect={() => router.push(`/w/${workspaceId}/trash`)}>
             <TrashIcon size={16} />
             Trash

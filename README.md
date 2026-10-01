@@ -25,6 +25,8 @@ An internal task manager for the team, built as a Redbooth replacement.
   with its lists, tasks, subtasks, comments, files, assignees and followers, matched to people
   by email. Projects are only imported once, and nothing changes in Redbooth.
 - **CSV import** for bringing tasks over from Asana, Trello or a spreadsheet
+- **Email in**: every workspace has its own email address. Forward or CC an email to it and it
+  becomes a task, files included, assigned to whoever sent it. See [Email in](#email-in).
 - **My tasks** across all workspaces, grouped by Overdue, Today, Tomorrow, Next 7 days, Later,
   plus **Updates**: what other people changed or said on tasks you follow, to dismiss or clear
 - **Team**: everyone's open tasks by person, across the workspaces you share
@@ -88,6 +90,9 @@ by signing in with Google, no invite needed.
 | `SLACK_ALERTS_WEBHOOK_URL` | Optional. Slack incoming webhook for server errors and failed backups. |
 | `BACKUP_TIME`, `BACKUP_TZ`, `BACKUP_KEEP_DAYS`, `BACKUP_REMOTE` | Docker deployment: nightly database backups kept on the server, plus an optional off-site copy of dumps and files (any rclone remote). See [deploy/HOSTINGER.md](deploy/HOSTINGER.md#backups). |
 | `REDBOOTH_CLIENT_ID`, `REDBOOTH_CLIENT_SECRET` | Optional. Lets admins sign in to Redbooth to import projects (People, then Import from Redbooth). Register an app in Redbooth with the callback URL `<BETTER_AUTH_URL>/api/redbooth/callback`. Without them, an admin can paste a Redbooth access token instead. For local testing, `npm run redbooth:mock` plus `REDBOOTH_API_URL=http://127.0.0.1:3998/api/3` and `REDBOOTH_OAUTH_URL=http://127.0.0.1:3998/oauth2`. |
+| `INBOUND_EMAIL_ADDRESS` | Optional. Turns on [Email in](#email-in): the mailbox workspace addresses are built on, e.g. `tasks@yourcompany.com` gives `tasks+<key>@yourcompany.com`. |
+| `INBOUND_IMAP_URL` | How email in reads that mailbox, e.g. `imaps://tasks%40yourcompany.com:app-password@imap.gmail.com:993` (URL-encode the user and password). Also `INBOUND_IMAP_MAILBOX` (default `INBOX`), `INBOUND_IMAP_DONE_MAILBOX` (where handled emails go, default `Processed`) and `INBOUND_POLL_SECONDS` (default `60`). |
+| `INBOUND_EMAIL_SECRET` | Instead of IMAP: lets a mail service post incoming emails to `/api/inbound-email`. Random secret, `openssl rand -hex 24`. |
 | `ANTHROPIC_API_KEY` | Optional. Connects the [AI features](#ai-features). Without it the AI buttons still show, and using one explains that AI isn't connected yet. |
 | `AI_MODEL` | Claude model to use. Defaults to `claude-opus-5-5`. |
 | `AI_HOURLY_LIMIT` | AI requests allowed per person per hour. Default `60`. |
@@ -121,6 +126,71 @@ Things to know:
 - **Trying it without a key**: `npm run ai:mock` starts a local stand-in for the API with canned
   answers. Run the app with
   `ANTHROPIC_BASE_URL=http://127.0.0.1:3999 ANTHROPIC_API_KEY=mock npm run dev`.
+
+## Email in
+
+Each workspace has its own address, shown in its settings (and under **Copy email address** in
+the workspace `...` menu). Forward an email to it, or CC it on a thread, and the email becomes a
+task:
+
+- **Title** from the subject (`Fwd:` and `Re:` dropped), **description** from the message,
+  **files** attached (up to `MAX_UPLOAD_MB` each, 20 per email; logos and other images
+  embedded in the email are left out, and anything too big is listed in the description).
+- It goes to the bottom of the workspace's **first list**, **assigned to whoever sent it**, so
+  nothing arrives unowned. Hand it on from there.
+
+**Who can email in**: people with an account, who are members of that workspace, sending from
+the email address on their account. Anything else is refused. The address contains a random key
+(about 90 bits), which is what keeps strangers out, so treat it like a password: workspace owners
+can replace it with **Get a new address**, and the old one stops working straight away. Emails
+that fail the receiving server's DMARC check (a forged sender) are refused too.
+
+**Refusals**: every email that reaches an address is listed under **Recent emails** in the
+workspace settings with what happened to it. People with an account also get a short email
+explaining why theirs wasn't added; strangers never get a reply. Automatic replies (out of
+office, bounces, mailing lists) are skipped silently, and the same email is never added twice.
+The list keeps 90 days.
+
+### Connecting a mailbox
+
+Pick one of these. Either way, set `INBOUND_EMAIL_ADDRESS` to the mailbox's address. It must
+accept **plus addresses** (`tasks+anything@`), which Gmail and most hosts do.
+
+**IMAP (Google Workspace and most mail hosts).** Create a mailbox just for this, like
+`tasks@yourcompany.com`. For Google Workspace: turn on 2-Step Verification for that account,
+create an **app password**, and set
+`INBOUND_IMAP_URL=imaps://tasks%40yourcompany.com:<app password, no spaces>@imap.gmail.com:993`.
+Other hosts work the same way with their IMAP server name. The app checks the inbox every minute
+and moves each email it has dealt with into `Processed` (created if missing). If the mailbox
+can't be reached, the alert goes to `SLACK_ALERTS_WEBHOOK_URL`. Microsoft 365 no longer allows
+password sign-in over IMAP, so use the webhook route below with it.
+
+**Webhook (a mail service posts each email).** Set `INBOUND_EMAIL_SECRET` and have the service
+`POST` the raw email to `https://<your domain>/api/inbound-email`, authenticated with
+`Authorization: Bearer <secret>`, or with the secret as the basic-auth password
+(`https://any:<secret>@<your domain>/api/inbound-email`) where only a URL can be set. It also
+accepts a form with the raw email in an `email` field (SendGrid's "post the raw, full MIME
+message") or `body-mime` (Mailgun: use the URL ending in `/api/inbound-email/mime`). With
+Cloudflare Email Routing, send everything for a subdomain (say `in.yourcompany.com`, with
+`INBOUND_EMAIL_ADDRESS=tasks@in.yourcompany.com`) to an Email Worker like this:
+
+```js
+export default {
+  async email(message, env) {
+    const res = await fetch("https://tasks.yourcompany.com/api/inbound-email", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.INBOUND_EMAIL_SECRET}`, "X-Envelope-To": message.to },
+      body: await new Response(message.raw).arrayBuffer(),
+    });
+    if (!res.ok) message.setReject(`The task manager couldn't take this email (${res.status})`);
+  },
+};
+```
+
+**Trying it locally**: set `INBOUND_EMAIL_ADDRESS=tasks@digibooth.test` and an
+`INBOUND_EMAIL_SECRET`, copy a workspace's address from its settings, then post any `.eml`
+file sent to it:
+`curl -H "Authorization: Bearer $INBOUND_EMAIL_SECRET" --data-binary @message.eml http://localhost:3100/api/inbound-email`.
 
 ## Deploying
 

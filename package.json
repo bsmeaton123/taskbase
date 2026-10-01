@@ -28,6 +28,8 @@
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.3",
     "geist": "^1.7.2",
+    "imapflow": "^2.2.1",
+    "mailparser": "^3.9.33",
     "next": "16.3.7",
     "nodemailer": "^10.0.13",
     "postgres": "^3.4.9",
@@ -41,6 +43,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/mailparser": "^3.9.0",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",

@@ -60,7 +60,13 @@ export function describeActivity(
   switch (kind) {
     case "task_created":
       icon = <PlusCircleIcon size={13} />;
-      text = d.source ? <>created this task in {String(d.source)}</> : <>created this task</>;
+      text = d.source ? (
+        <>created this task in {String(d.source)}</>
+      ) : d.via === "email" ? (
+        <>created this task by email</>
+      ) : (
+        <>created this task</>
+      );
       break;
     case "renamed":
       icon = <TextTIcon size={13} />;

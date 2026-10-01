@@ -38,6 +38,7 @@ describe("describeActivity", () => {
     expect(words("unassigned", {}).text).toBe("removed the assignee");
     expect(words("task_created", {}).text).toBe("created this task");
     expect(words("task_created", { source: "Redbooth" }).text).toBe("created this task in Redbooth");
+    expect(words("task_created", { via: "email" }).text).toBe("created this task by email");
     expect(words("unassigned", { userId: "sofia", name: "Sofia" }).text).toBe("unassigned Sofia");
     expect(words("unassigned", { userId: "me", name: "Me" }).text).toBe("unassigned you");
     expect(words("unassigned", { userId: "priya", name: "Priya" }).text).toBe("left this task");

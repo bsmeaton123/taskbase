@@ -3,6 +3,8 @@ import { PRODUCT_NAME } from "@/lib/product";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { sendAlert } from "@/server/alerts";
+import { imapConfig, pollMailbox } from "@/server/inbound/imap";
+import { purgeOldInboundEmails } from "@/server/inbound/ingest";
 import { sendDailyReminders } from "@/server/reminders";
 import { purgeOldTrash } from "@/server/trash";
 
@@ -14,8 +16,12 @@ import { purgeOldTrash } from "@/server/trash";
 const TICK_MS = 15 * 60 * 1000;
 const LOCK_KEY = 7_431_220; // arbitrary, stable
 
+/** Email in (IMAP) checks the mailbox far more often: a minute by default. */
+const POLL_MS = Math.max(30, Number(process.env.INBOUND_POLL_SECONDS) || 60) * 1000;
+
 declare global {
   var __taskbaseScheduler: ReturnType<typeof setInterval> | undefined;
+  var __taskbaseInbound: ReturnType<typeof setInterval> | undefined;
 }
 
 export function startScheduler() {
@@ -26,6 +32,31 @@ export function startScheduler() {
   setTimeout(run, 30_000).unref?.();
   globalThis.__taskbaseScheduler = setInterval(run, TICK_MS);
   globalThis.__taskbaseScheduler.unref?.();
+  startInboundPolling();
+}
+
+function startInboundPolling() {
+  if (globalThis.__taskbaseInbound || !imapConfig()) return;
+  let running = false;
+  const poll = async () => {
+    if (running) return; // a slow mailbox shouldn't stack up polls
+    running = true;
+    try {
+      const handled = await pollMailbox();
+      if (handled > 0) console.log(`[inbound-email] handled ${handled} email${handled === 1 ? "" : "s"}`);
+    } catch (error) {
+      console.error("[inbound-email] couldn't read the mailbox", error);
+      await sendAlert(
+        "inbound:imap",
+        `:warning: ${PRODUCT_NAME} couldn't read the email-in mailbox: ${String(error).slice(0, 300)}`,
+      );
+    } finally {
+      running = false;
+    }
+  };
+  setTimeout(poll, 20_000).unref?.();
+  globalThis.__taskbaseInbound = setInterval(poll, POLL_MS);
+  globalThis.__taskbaseInbound.unref?.();
 }
 
 async function tick() {
@@ -57,5 +88,10 @@ async function runJobs() {
     if (purged > 0) console.log(`[scheduler] emptied ${purged} old trashed task${purged === 1 ? "" : "s"}`);
   } catch (error) {
     console.error("[scheduler] trash purge failed", error);
+  }
+  try {
+    await purgeOldInboundEmails();
+  } catch (error) {
+    console.error("[scheduler] email-in log purge failed", error);
   }
 }

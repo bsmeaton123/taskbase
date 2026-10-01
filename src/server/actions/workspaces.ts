@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { and, count, eq, inArray, isNull, max, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -129,6 +130,19 @@ export async function setWorkspaceArchived(id: string, archived: boolean) {
     await db
       .update(workspaces)
       .set({ archivedAt: archived ? new Date() : null })
+      .where(eq(workspaces.id, id));
+    return null;
+  });
+}
+
+/** A new email-in address for the workspace; the old one stops working straight away. */
+export async function newInboundAddress(id: string) {
+  return run(async () => {
+    const viewer = await requireActionUser();
+    await assertWorkspaceAccess(viewer, idSchema.parse(id), { manage: true });
+    await db
+      .update(workspaces)
+      .set({ inboundKey: randomBytes(12).toString("hex") })
       .where(eq(workspaces.id, id));
     return null;
   });

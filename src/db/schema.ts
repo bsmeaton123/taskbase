@@ -161,6 +161,14 @@ export const workspaces = pgTable("workspaces", {
   /** Templates are blueprints: listed for everyone, hidden from sidebars and My tasks. */
   isTemplate: boolean("is_template").notNull().default(false),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
+  /**
+   * The secret part of the workspace's email-in address (`tasks+<key>@domain`). About 90
+   * random bits, so the address can't be guessed; managers can replace it if it leaks.
+   */
+  inboundKey: text("inbound_key")
+    .notNull()
+    .unique()
+    .default(sql`substr(replace(gen_random_uuid()::text, '-', ''), 1, 24)`),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -547,6 +555,32 @@ export const redboothImportedProjects = pgTable("redbooth_imported_projects", {
   name: text("name").notNull(),
   importedAt: createdAt(),
 });
+
+/* -------------------------------------------------------------------------- */
+/* Email in                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Every email that reached a workspace address (or tried to), for de-duplication by
+ * Message-ID and so people can see why an email didn't become a task. `taskId` has no
+ * foreign key on purpose: tasks move to the trash and back, and this is only a log.
+ */
+export const inboundEmails = pgTable(
+  "inbound_emails",
+  {
+    id: id(),
+    messageId: text("message_id").notNull().unique(),
+    workspaceId: text("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
+    senderEmail: text("sender_email").notNull(),
+    subject: text("subject").notNull().default(""),
+    /** "created", "rejected" or "ignored" (automatic replies and our own emails). */
+    status: text("status").notNull(),
+    reason: text("reason"),
+    taskId: text("task_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("inbound_emails_workspace_idx").on(t.workspaceId, t.createdAt)],
+);
 
 /* -------------------------------------------------------------------------- */
 /* Notifications                                                               */

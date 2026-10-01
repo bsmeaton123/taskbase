@@ -23,6 +23,9 @@ Internal Redbooth-style task manager. See README.md for setup and structure.
   they can be restored for 30 days. A new table that references tasks must be added to the
   snapshot and restore there, and a new NOT NULL column on those tables needs existing
   `trashed_tasks.snapshot` rows backfilled in its migration.
+- Email in: every rule lives in `ingestEmail` (`src/server/inbound/ingest.ts`); the IMAP poller and
+  the `/api/inbound-email` webhook only hand it raw MIME. Never reply to senders without an account,
+  check DMARC before anything that can send a reply, and dedupe by Message-ID.
 - Attachments: upload/download via `src/app/api/attachments`, bytes via `src/lib/storage.ts`.
   Email goes through `sendEmail` in `src/lib/email.ts`; notification emails are queued in
   `notify()` with `after()`.

@@ -12,6 +12,7 @@ import { TaskSelectionProvider } from "@/components/workspace/selection";
 import { WorkspaceToolbar } from "@/components/workspace/toolbar";
 import { getWorkspaceAccess } from "@/lib/access";
 import { requireUser } from "@/lib/session";
+import { inboundAddressFor } from "@/server/inbound/ingest";
 import { getWorkspacePage, type WorkspaceFilters } from "@/server/queries";
 
 type Props = {
@@ -67,6 +68,7 @@ export default async function WorkspacePage({ params, searchParams }: Props) {
                 color: ws.color,
                 isTemplate: ws.isTemplate,
                 canManage: access.canManage,
+                emailAddress: ws.isTemplate ? null : inboundAddressFor(ws.inboundKey),
               }}
               view={view}
               show={show}

@@ -1,17 +1,23 @@
 "use client";
 
 import {
+  CheckCircleIcon,
+  CopyIcon,
   CrownSimpleIcon,
   DotsThreeIcon,
+  EnvelopeSimpleIcon,
+  MinusCircleIcon,
   PencilSimpleIcon,
   SignOutIcon,
   TrashIcon,
   UserMinusIcon,
   UserPlusIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 import { perform, useApp } from "@/components/app-context";
 import { ColorSwatches } from "@/components/color-swatches";
 import { PersonPicker } from "@/components/pickers";
@@ -23,11 +29,13 @@ import { AutoTextarea, Field, Input } from "@/components/ui/input";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { workspaceSwatch } from "@/lib/colors";
+import { formatTimestamp, timeAgo } from "@/lib/dates";
 import { pluralize } from "@/lib/utils";
 import { createTag, deleteTag, updateTag } from "@/server/actions/tags";
 import {
   addWorkspaceMembers,
   deleteWorkspace,
+  newInboundAddress,
   removeWorkspaceMember,
   setWorkspaceArchived,
   setWorkspaceMemberRole,
@@ -344,6 +352,148 @@ export function DangerZone({
         </DialogContent>
       </Dialog>
     </Section>
+  );
+}
+
+export type InboundEmailRow = {
+  id: string;
+  senderEmail: string;
+  subject: string;
+  status: string;
+  reason: string | null;
+  createdAt: Date;
+  taskNumber: number | null;
+};
+
+/** The workspace's email-in address, and what recently arrived at it. */
+export function EmailInSettings({
+  workspaceId,
+  address,
+  archived,
+  canManage,
+  recent,
+}: {
+  workspaceId: string;
+  /** Null until an admin connects a mailbox on the server. */
+  address: string | null;
+  archived: boolean;
+  canManage: boolean;
+  recent: InboundEmailRow[];
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  async function copy() {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      toast.success("Email address copied");
+    } catch {
+      toast.error("Couldn't copy the address. Select it and copy it yourself.");
+    }
+  }
+
+  return (
+    <Section
+      title="Email in"
+      description="Forward or send an email to this address and it becomes a task in the first list, assigned to whoever sent it. The subject becomes the title, the message the description, and attachments come along. Only members can email in, from the address on their account."
+    >
+      {!address ? (
+        <p className="rounded-[10px] border border-dashed border-border-strong px-3.5 py-3 text-[13px] text-muted">
+          Not connected yet. An admin can turn it on by connecting a mailbox to the server
+          (INBOUND_EMAIL_ADDRESS); the README explains how.
+        </p>
+      ) : (
+        <>
+          <div className="grid gap-2">
+            <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
+              <EnvelopeSimpleIcon size={15} className="shrink-0 text-muted" />
+              <code className="min-w-0 flex-1 select-all truncate font-mono text-[12.5px]">
+                {address}
+              </code>
+            </div>
+            {archived && (
+              <p className="text-[12.5px] text-warning-text">
+                Emails are refused while the workspace is archived.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={copy}>
+                <CopyIcon size={15} />
+                Copy address
+              </Button>
+              {canManage && (
+                <Button variant="ghost" onClick={() => setConfirming(true)}>
+                  Get a new address
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <h3 className="text-[13px] font-semibold">Recent emails</h3>
+            {recent.length === 0 ? (
+              <p className="text-[13px] text-muted">
+                Nothing yet. Emails sent here show up in this list, including any that didn&apos;t
+                become a task and why.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border rounded-[10px] border border-border">
+                {recent.map((r) => (
+                  <InboundRow key={r.id} row={r} />
+                ))}
+              </ul>
+            )}
+          </div>
+          <ConfirmDialog
+            open={confirming}
+            onOpenChange={setConfirming}
+            title="Get a new address?"
+            description="The current address stops working straight away. Anyone who saved it, or set up a forwarding rule with it, will need the new one."
+            confirmLabel="Get a new address"
+            onConfirm={() =>
+              perform(newInboundAddress(workspaceId), { success: "New address ready" })
+            }
+          />
+        </>
+      )}
+    </Section>
+  );
+}
+
+function InboundRow({ row }: { row: InboundEmailRow }) {
+  const created = row.status === "created";
+  return (
+    <li className="flex items-start gap-2.5 px-3 py-2.5 text-[13px]">
+      {created ? (
+        <CheckCircleIcon size={16} weight="fill" className="mt-px shrink-0 text-success" aria-hidden />
+      ) : row.status === "rejected" ? (
+        <WarningCircleIcon size={16} weight="fill" className="mt-px shrink-0 text-danger-text" aria-hidden />
+      ) : (
+        <MinusCircleIcon size={16} className="mt-px shrink-0 text-subtle" aria-hidden />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{row.subject || "(no subject)"}</p>
+        <p className="truncate text-[12.5px] text-muted">
+          {row.senderEmail || "Unknown sender"},{" "}
+          <span title={formatTimestamp(row.createdAt)}>{timeAgo(row.createdAt)}</span>
+        </p>
+        <p className="mt-0.5 text-[12.5px]">
+          {created ? (
+            row.taskNumber ? (
+              <Link href={`/t/${row.taskNumber}`} className="text-accent-text hover:underline">
+                Added as #{row.taskNumber}
+              </Link>
+            ) : (
+              <span className="text-muted">Added as a task (since deleted)</span>
+            )
+          ) : (
+            <span className={row.status === "rejected" ? "text-danger-text" : "text-muted"}>
+              {row.status === "rejected" ? "Not added: " : "Skipped: "}
+              {row.reason}
+            </span>
+          )}
+        </p>
+      </div>
+    </li>
   );
 }
 

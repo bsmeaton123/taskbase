@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { WorkspaceMark } from "@/components/task-bits";
 import {
   DangerZone,
+  EmailInSettings,
   GeneralSettings,
   MembersSettings,
   TagSettings,
@@ -13,6 +14,7 @@ import {
 } from "@/components/workspace/settings";
 import { getWorkspaceAccess } from "@/lib/access";
 import { requireUser } from "@/lib/session";
+import { inboundAddressFor, recentInboundEmails } from "@/server/inbound/ingest";
 import { getActivePeople, getWorkspaceMembers, getWorkspaceTags } from "@/server/queries";
 
 export const metadata: Metadata = { title: "Workspace settings" };
@@ -26,10 +28,11 @@ export default async function WorkspaceSettingsPage({
   const viewer = await requireUser();
   const access = await getWorkspaceAccess(viewer, workspaceId);
   if (!access) notFound();
-  const [members, people, tags] = await Promise.all([
+  const [members, people, tags, inbound] = await Promise.all([
     getWorkspaceMembers(workspaceId),
     getActivePeople(),
     getWorkspaceTags(workspaceId),
+    recentInboundEmails(workspaceId),
   ]);
   const ws = access.workspace;
 
@@ -68,6 +71,15 @@ export default async function WorkspaceSettingsPage({
             isMember={access.role !== "admin"}
           />
           <TagSettings workspaceId={ws.id} tags={tags} />
+          {!ws.isTemplate && (
+            <EmailInSettings
+              workspaceId={ws.id}
+              address={inboundAddressFor(ws.inboundKey)}
+              archived={Boolean(ws.archivedAt)}
+              canManage={access.canManage}
+              recent={inbound}
+            />
+          )}
           {access.canManage && (
             <TemplateSettings
               workspace={{ id: ws.id, name: ws.name, isTemplate: ws.isTemplate }}
