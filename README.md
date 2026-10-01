@@ -29,7 +29,10 @@ An internal task manager for the team, built as a Redbooth replacement.
   becomes a task, files included, assigned to whoever sent it. See [Email in](#email-in).
 - **My tasks** across all workspaces, grouped by Overdue, Today, Tomorrow, Next 7 days, Later,
   plus **Updates**: what other people changed or said on tasks you follow, to dismiss or clear
-- **Team**: everyone's open tasks by person, across the workspaces you share
+- **Team workload**: a week grid of who has what due each day, plus overdue and undated work,
+  with busy days tinted. Drag a task (or press Space and use the arrow keys) to hand it to
+  someone else or move its day, with Undo. A People view lists everyone's open, overdue and
+  due-soon counts across the workspaces you share
 - **Morning reminder** email of what's overdue or due today (per-person, off by choice)
 - **Inbox** for assignments, mentions, comments and status changes on tasks you follow, plus
   optional **email notifications** (per-person setting)

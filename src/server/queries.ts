@@ -1053,3 +1053,141 @@ export async function getPersonTasks(
   });
   return { person, tasks: personTasks };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Team workload                                                               */
+/* -------------------------------------------------------------------------- */
+
+export type WorkloadTask = {
+  id: string;
+  number: number;
+  title: string;
+  workspaceId: string;
+  status: TaskStatus;
+  urgent: boolean;
+  startDate: string | null;
+  dueDate: string | null;
+  assigneeIds: string[];
+};
+
+export type WorkloadPerson = Person & {
+  /** Workspaces (of those the viewer can see) this person is a member of: where they can take work. */
+  workspaceIds: string[];
+};
+
+export type Workload = {
+  people: WorkloadPerson[];
+  workspaces: { id: string; name: string; color: string }[];
+  tasks: WorkloadTask[];
+  /**
+   * How many undated tasks each row has in all (person id, or UNASSIGNED). Only a preview of
+   * them is in `tasks`; the grid shows "+N more" for the rest.
+   */
+  undatedTotal: Record<string, number>;
+};
+
+/**
+ * The workload grid for one week: everyone who shares a workspace with the viewer (admins:
+ * everyone in any workspace), with their open tasks that are overdue, due that week, or
+ * undated. Scoped like getTeam: only workspaces the viewer can see, never templates or
+ * archived ones. Undated tasks are trimmed to a preview per row, newest first.
+ */
+export async function getWorkload(
+  viewer: CurrentUser,
+  weekStart: string,
+  today: string,
+): Promise<Workload> {
+  const weekEnd = shiftDate(weekStart, 6);
+  const liveWorkspace = and(eq(workspaces.isTemplate, false), isNull(workspaces.archivedAt));
+  const columns = { id: workspaces.id, name: workspaces.name, color: workspaces.color };
+  const visible = await (viewer.isAdmin
+    ? db.select(columns).from(workspaces).where(liveWorkspace)
+    : db
+        .select(columns)
+        .from(workspaces)
+        .innerJoin(
+          workspaceMembers,
+          and(eq(workspaceMembers.workspaceId, workspaces.id), eq(workspaceMembers.userId, viewer.id)),
+        )
+        .where(liveWorkspace)
+  ).orderBy(asc(sql`lower(${workspaces.name})`));
+  const wsIds = visible.map((w) => w.id);
+  if (wsIds.length === 0) return { people: [], workspaces: [], tasks: [], undatedTotal: {} };
+
+  const active = or(isNull(user.banned), eq(user.banned, false));
+  const memberships = await db
+    .select({ userId: workspaceMembers.userId, workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .innerJoin(user, eq(user.id, workspaceMembers.userId))
+    .where(and(inArray(workspaceMembers.workspaceId, wsIds), active));
+  const byPerson = new Map<string, string[]>();
+  for (const m of memberships) byPerson.set(m.userId, [...(byPerson.get(m.userId) ?? []), m.workspaceId]);
+
+  const [peopleRows, taskRows] = await Promise.all([
+    byPerson.size
+      ? db
+          .select({ id: user.id, name: user.name, email: user.email, image: user.image })
+          .from(user)
+          .where(inArray(user.id, [...byPerson.keys()]))
+          .orderBy(asc(sql`lower(${user.name})`))
+      : [],
+    db
+      .select({
+        id: tasks.id,
+        number: tasks.number,
+        title: tasks.title,
+        workspaceId: tasks.workspaceId,
+        status: tasks.status,
+        urgent: tasks.urgent,
+        startDate: tasks.startDate,
+        dueDate: tasks.dueDate,
+        assigneeIds: sql<
+          string[]
+        >`coalesce((select json_agg(ta.user_id order by ta.created_at) from task_assignees ta where ta.task_id = "tasks"."id"), '[]'::json)`,
+      })
+      .from(tasks)
+      .where(
+        and(
+          inArray(tasks.workspaceId, wsIds),
+          notInArray(tasks.status, CLOSED),
+          or(
+            isNull(tasks.dueDate),
+            sql`"tasks"."due_date" < ${today}`,
+            sql`"tasks"."due_date" between ${weekStart} and ${weekEnd}`,
+          ),
+        ),
+      )
+      .orderBy(sql`"tasks"."due_date" asc nulls last`, desc(tasks.urgent), desc(tasks.number))
+      .limit(5000),
+  ]);
+
+  const people = peopleRows.map((p) => ({ ...p, workspaceIds: byPerson.get(p.id) ?? [] }));
+  const shown = new Set(people.map((p) => p.id));
+
+  // Undated work can run to hundreds of tasks: keep a preview per row and count the rest.
+  const PREVIEW = 3;
+  const kept = new Map<string, number>();
+  const undatedTotal: Record<string, number> = {};
+  const result: WorkloadTask[] = [];
+  for (const t of taskRows) {
+    const rows = t.assigneeIds.length
+      ? t.assigneeIds.filter((id) => shown.has(id))
+      : ["unassigned"];
+    if (rows.length === 0) continue; // only on deactivated people's plates
+    if (t.dueDate) {
+      result.push(t);
+      continue;
+    }
+    let keep = false;
+    for (const r of rows) {
+      undatedTotal[r] = (undatedTotal[r] ?? 0) + 1;
+      const n = kept.get(r) ?? 0;
+      if (n < PREVIEW) {
+        kept.set(r, n + 1);
+        keep = true;
+      }
+    }
+    if (keep) result.push(t);
+  }
+  return { people, workspaces: visible, tasks: result, undatedTotal };
+}
