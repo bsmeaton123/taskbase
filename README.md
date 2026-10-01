@@ -88,15 +88,15 @@ by signing in with Google, no invite needed.
 | `SLACK_ALERTS_WEBHOOK_URL` | Optional. Slack incoming webhook for server errors and failed backups. |
 | `BACKUP_TIME`, `BACKUP_TZ`, `BACKUP_KEEP_DAYS`, `BACKUP_REMOTE` | Docker deployment: nightly database backups kept on the server, plus an optional off-site copy of dumps and files (any rclone remote). See [deploy/HOSTINGER.md](deploy/HOSTINGER.md#backups). |
 | `REDBOOTH_CLIENT_ID`, `REDBOOTH_CLIENT_SECRET` | Optional. Lets admins sign in to Redbooth to import projects (People, then Import from Redbooth). Register an app in Redbooth with the callback URL `<BETTER_AUTH_URL>/api/redbooth/callback`. Without them, an admin can paste a Redbooth access token instead. For local testing, `npm run redbooth:mock` plus `REDBOOTH_API_URL=http://127.0.0.1:3998/api/3` and `REDBOOTH_OAUTH_URL=http://127.0.0.1:3998/oauth2`. |
-| `ANTHROPIC_API_KEY` | Optional. Turns on the [AI features](#ai-features). Without it, every AI button is hidden. |
+| `ANTHROPIC_API_KEY` | Optional. Connects the [AI features](#ai-features). Without it the AI buttons still show, and using one explains that AI isn't connected yet. |
 | `AI_MODEL` | Claude model to use. Defaults to `claude-opus-5-5`. |
 | `AI_HOURLY_LIMIT` | AI requests allowed per person per hour. Default `60`. |
-| `AI_ENABLED` | Set to `false` to switch AI off without removing the key. |
+| `AI_ENABLED` | Set to `false` to switch AI off and hide every AI button. |
 | `AI_DISABLE_FALLBACKS` | Set to `true` to stop refused requests being retried on Anthropic's fallback model. |
 
 ## AI features
 
-Set `ANTHROPIC_API_KEY` and these appear. Nothing is created without someone reviewing it first.
+Set `ANTHROPIC_API_KEY` and these work (without it they show, but explain that AI isn't connected yet). Nothing is created without someone reviewing it first.
 
 | Feature | Where |
 | --- | --- |

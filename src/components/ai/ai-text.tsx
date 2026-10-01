@@ -4,6 +4,7 @@ import { ArrowClockwiseIcon, SparkleIcon, StopIcon } from "@phosphor-icons/react
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AI_NOT_CONNECTED } from "@/lib/ai-messages";
 import { cn } from "@/lib/utils";
 
 export const NETWORK_ERROR = "Couldn't reach the server. Check your connection and try again.";
@@ -275,7 +276,8 @@ export function AiCard({
           {text ? "Stopped." : "Stopped before Claude wrote anything."}
         </p>
       )}
-      {(error || empty || stopped) && onRetry && !loading && (
+      {/* Retrying can't help until a key is connected. */}
+      {(error || empty || stopped) && error !== AI_NOT_CONNECTED && onRetry && !loading && (
         <Button size="sm" className="mt-2.5" onClick={onRetry}>
           <ArrowClockwiseIcon size={14} />
           Try again

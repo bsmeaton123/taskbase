@@ -3,7 +3,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { LiveRefresh, TimeZoneSync } from "@/components/live";
 import { NavProvider, Sidebar } from "@/components/sidebar";
 import { getTimeZone, getToday, requireUser } from "@/lib/session";
-import { aiEnabled } from "@/server/ai/client";
+import { aiVisible } from "@/server/ai/client";
 import { getActivePeople, getSidebarData, getTemplates } from "@/server/queries";
 
 export default async function AppLayout({
@@ -21,7 +21,7 @@ export default async function AppLayout({
   ]);
 
   return (
-    <AppProvider value={{ viewer, today, people, workspaces: sidebar.workspaces, ai: aiEnabled() }}>
+    <AppProvider value={{ viewer, today, people, workspaces: sidebar.workspaces, ai: aiVisible() }}>
       <TimeZoneSync current={timeZone} />
       <LiveRefresh />
       <CommandPalette />

@@ -32,7 +32,9 @@ Internal Redbooth-style task manager. See README.md for setup and structure.
   free of dates and per-request data); context builders in `src/server/ai/context.ts` must be
   scoped to the viewer like queries are, and wrap data in tags the prompt treats as data.
   Don't send `temperature`/`top_p`/`top_k`, `budget_tokens` or forced `tool_choice`: the
-  model rejects them. AI features must stay hidden when `aiEnabled()` is false (`useApp().ai`).
+  model rejects them. AI buttons show unless `AI_ENABLED=false` (`aiVisible()`, `useApp().ai`); without a key
+  (`aiEnabled()` false) they stay visible and calls fail with `AI_NOT_CONNECTED` (`src/lib/ai-messages.ts`). Passive AI (like
+  smart defaults while typing) checks `aiEnabled()` and stays silent instead.
   Test locally with `npm run ai:mock` plus `ANTHROPIC_BASE_URL=http://127.0.0.1:3999`.
 - Every `<form>` has `method="post"`: a submit before hydration otherwise falls back to GET and
   puts what was typed (passwords included) into the URL, history and server logs.

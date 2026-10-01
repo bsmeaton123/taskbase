@@ -5,6 +5,7 @@ import { and, count, eq, gt } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@/db";
 import { aiUsage } from "@/db/schema";
+import { AI_NOT_CONNECTED } from "@/lib/ai-messages";
 import { ActionError, type CurrentUser } from "@/lib/session";
 
 /**
@@ -18,9 +19,18 @@ import { ActionError, type CurrentUser } from "@/lib/session";
 export const AI_MODEL = process.env.AI_MODEL || "claude-opus-5-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
+/** True when Claude is connected (a key is set) and AI isn't switched off. */
 export function aiEnabled() {
   if (process.env.AI_ENABLED === "false") return false;
   return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+}
+
+/**
+ * Whether AI buttons show at all. They show even before a key is connected (using one then
+ * says how to connect it); AI_ENABLED=false hides them entirely.
+ */
+export function aiVisible() {
+  return process.env.AI_ENABLED !== "false";
 }
 
 let client: Anthropic | null = null;
@@ -70,7 +80,7 @@ function hourlyLimit() {
  * through). recordUsage() fills the row in afterwards. Returns the row id.
  */
 export async function assertAiAvailable(viewer: CurrentUser, feature: AiFeature): Promise<string> {
-  if (!aiEnabled()) throw new ActionError("AI features aren't set up on this server yet.");
+  if (!aiEnabled()) throw new ActionError(AI_NOT_CONNECTED);
   const [{ used }] = await db
     .select({ used: count() })
     .from(aiUsage)
