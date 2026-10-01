@@ -94,7 +94,7 @@ by signing in with Google, no invite needed.
 | `BACKUP_TIME`, `BACKUP_TZ`, `BACKUP_KEEP_DAYS`, `BACKUP_REMOTE` | Docker deployment: nightly database backups kept on the server, plus an optional off-site copy of dumps and files (any rclone remote). See [deploy/HOSTINGER.md](deploy/HOSTINGER.md#backups). |
 | `REDBOOTH_CLIENT_ID`, `REDBOOTH_CLIENT_SECRET` | Optional. Lets admins sign in to Redbooth to import projects (People, then Import from Redbooth). Register an app in Redbooth with the callback URL `<BETTER_AUTH_URL>/api/redbooth/callback`. Without them, an admin can paste a Redbooth access token instead. For local testing, `npm run redbooth:mock` plus `REDBOOTH_API_URL=http://127.0.0.1:3998/api/3` and `REDBOOTH_OAUTH_URL=http://127.0.0.1:3998/oauth2`. |
 | `INBOUND_EMAIL_ADDRESS` | Optional. Turns on [Email in](#email-in): the mailbox workspace addresses are built on, e.g. `tasks@yourcompany.com` gives `tasks+<key>@yourcompany.com`. |
-| `INBOUND_IMAP_URL` | How email in reads that mailbox, e.g. `imaps://tasks%40yourcompany.com:app-password@imap.gmail.com:993` (URL-encode the user and password). Also `INBOUND_IMAP_MAILBOX` (default `INBOX`), `INBOUND_IMAP_DONE_MAILBOX` (where handled emails go, default `Processed`) and `INBOUND_POLL_SECONDS` (default `60`). |
+| `INBOUND_IMAP_URL` | How email in reads that mailbox, e.g. `imaps://tasks%40yourcompany.com:app-password@imap.gmail.com:993` (URL-encode the user and password). Also `INBOUND_IMAP_MAILBOX` (default `INBOX`), `INBOUND_IMAP_DONE_MAILBOX` (where handled emails go, default `Processed`), `INBOUND_IMAP_FAILED_MAILBOX` (where an email goes after failing three times, default `Failed`) and `INBOUND_POLL_SECONDS` (default `60`). |
 | `INBOUND_EMAIL_SECRET` | Instead of IMAP: lets a mail service post incoming emails to `/api/inbound-email`. Random secret, `openssl rand -hex 24`. |
 | `ANTHROPIC_API_KEY` | Optional. Connects the [AI features](#ai-features). Without it the AI buttons still show, and using one explains that AI isn't connected yet. |
 | `AI_MODEL` | Claude model to use. Defaults to `claude-opus-5-5`. |
@@ -164,8 +164,10 @@ accept **plus addresses** (`tasks+anything@`), which Gmail and most hosts do.
 create an **app password**, and set
 `INBOUND_IMAP_URL=imaps://tasks%40yourcompany.com:<app password, no spaces>@imap.gmail.com:993`.
 Other hosts work the same way with their IMAP server name. The app checks the inbox every minute
-and moves each email it has dealt with into `Processed` (created if missing). If the mailbox
-can't be reached, the alert goes to `SLACK_ALERTS_WEBHOOK_URL`. Microsoft 365 no longer allows
+and moves each email it has dealt with into `Processed` (created if missing; on hosts that keep
+folders under the inbox, like Hostinger, that's `INBOX.Processed`). An email that fails three
+times in a row moves to `Failed` so it can't hold up the rest. If the mailbox can't be reached,
+the alert goes to `SLACK_ALERTS_WEBHOOK_URL`. Microsoft 365 no longer allows
 password sign-in over IMAP, so use the webhook route below with it.
 
 **Webhook (a mail service posts each email).** Set `INBOUND_EMAIL_SECRET` and have the service

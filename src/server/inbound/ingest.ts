@@ -15,6 +15,7 @@ import {
 import { appUrl, renderEmail, sendEmail } from "@/lib/email";
 import {
   addressesIn,
+  cleanText,
   dmarcFailed,
   findWorkspaceKey,
   isAutomatic,
@@ -148,31 +149,29 @@ async function refuse(
 }
 
 /**
- * For a message too big to download (the IMAP poller sees its size first): logged against
- * its workspace and explained to the sender, so it doesn't vanish without a word.
+ * For a message the poller won't (too big) or can't (keeps failing) turn into a task, known
+ * only by its envelope: logged against its workspace and explained to the sender, so it
+ * doesn't vanish without a word.
  */
-export async function refuseOversized(message: {
-  messageId: string;
-  sender: string;
-  subject: string;
-  recipients: string[];
-}) {
+export async function refuseUnreadable(
+  message: { messageId: string; sender: string; subject: string; recipients: string[] },
+  reason: string,
+) {
   const base = inboundAddress();
   const key = base ? findWorkspaceKey(message.recipients, base) : null;
   const workspace = await workspaceByKey(key);
-  const sender = message.sender.trim().toLowerCase();
+  const sender = cleanText(message.sender).trim().toLowerCase();
   const person = await personByEmail(sender);
-  const mb = Math.round(MAX_EMAIL_BYTES / 1024 / 1024);
   return refuse(
     {
-      messageId: message.messageId.slice(0, 500),
+      messageId: cleanText(message.messageId).slice(0, 500),
       workspace,
       sender,
       person,
-      subject: message.subject.slice(0, 300),
+      subject: cleanText(message.subject).replace(/\s+/g, " ").trim().slice(0, 300),
     },
     "rejected",
-    `The email was over ${mb} MB. Attach large files to the task instead.`,
+    reason,
     Boolean(workspace),
   );
 }
@@ -190,12 +189,12 @@ export async function ingestEmail(
     skipTextToHtml: true,
   });
   const messageId = (
-    mail.messageId?.trim() || `sha256:${createHash("sha256").update(raw).digest("hex")}`
+    cleanText(mail.messageId).trim() || `sha256:${createHash("sha256").update(raw).digest("hex")}`
   ).slice(0, 500);
   const fromValue = (Array.isArray(mail.from) ? mail.from[0] : mail.from)?.value[0];
-  const sender = fromValue?.address?.trim().toLowerCase() ?? "";
-  const senderName = fromValue?.name?.trim() || sender || "someone";
-  const subject = (mail.subject ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const sender = cleanText(fromValue?.address).trim().toLowerCase();
+  const senderName = cleanText(fromValue?.name).trim() || sender || "someone";
+  const subject = cleanText(mail.subject).replace(/\s+/g, " ").trim().slice(0, 300);
 
   const recipients = [
     ...(opts.recipients ?? []),
@@ -248,7 +247,7 @@ export async function ingestEmail(
   if (!list) return refuse(ctx, "rejected", `${workspace.name} has no task lists to add it to.`, true);
 
   const { keep, skipped } = pickAttachments(mail.attachments, maxUploadBytes());
-  const body = mail.text ?? "";
+  const body = cleanText(mail.text);
   const title = taskTitle(subject, body, senderName);
   const description = taskDescription(body, skipped);
   const driver = storageDriver();
@@ -303,7 +302,7 @@ export async function ingestEmail(
         .values({
           taskId: task.id,
           uploaderId: person.id,
-          name: sanitizeFileName(a.filename || "attachment"),
+          name: sanitizeFileName(cleanText(a.filename) || "attachment"),
           contentType: (a.contentType || "application/octet-stream").slice(0, 120),
           size: a.size,
           storage: driver,

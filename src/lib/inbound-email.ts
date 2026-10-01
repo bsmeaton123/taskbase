@@ -9,6 +9,14 @@ export const MAX_ATTACHMENTS = 20;
 
 export type InboundAddress = { local: string; domain: string };
 
+/**
+ * Text from an email, safe to store: control characters dropped (Postgres refuses NUL, and
+ * malformed mail does carry them), line breaks and tabs kept.
+ */
+export function cleanText(value: string | undefined | null): string {
+  return (value ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+}
+
 /** The mailbox in INBOUND_EMAIL_ADDRESS, split for plus-addressing. Null when unset or invalid. */
 export function parseInboundAddress(value: string | undefined | null): InboundAddress | null {
   const m = /^\s*([^\s@+]+)@([^\s@]+\.[^\s@]+)\s*$/.exec(value ?? "");

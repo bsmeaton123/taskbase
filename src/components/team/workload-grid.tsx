@@ -268,9 +268,18 @@ export function WorkloadGrid({
         setStatus(`Cancelled. ${from.task.title} stays where it was.`);
       }
     }
+    // A click anywhere else puts the task back, so arrow keys don't stay captured.
+    function onPointer() {
+      setPicked(null);
+      setStatus(`Cancelled. ${from.task.title} stays where it was.`);
+    }
     // Capture, so Escape doesn't also close the task panel or leave selection mode.
     window.addEventListener("keydown", onKey, { capture: true });
-    return () => window.removeEventListener("keydown", onKey, { capture: true });
+    window.addEventListener("pointerdown", onPointer, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKey, { capture: true });
+      window.removeEventListener("pointerdown", onPointer, { capture: true });
+    };
   }, [picked, rowIds, columns, accepts, commit, rowName, columnLabel, gridId]);
 
   /* ---- Pointer drags (dnd-kit) ------------------------------------------- */
@@ -466,7 +475,7 @@ function describeMove(
         ? `Reassigned from ${name(move.from)} to ${name(move.to)}`
         : move.to
           ? `Assigned to ${name(move.to)}`
-          : `Unassigned ${name(move.from!)}`;
+          : `Unassigned from ${name(move.from!)}`;
   const when =
     plan.dueDate === task.dueDate
       ? null

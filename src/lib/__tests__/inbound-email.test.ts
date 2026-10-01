@@ -3,6 +3,7 @@ import {
   DESCRIPTION_MAX,
   MAX_ATTACHMENTS,
   addressesIn,
+  cleanText,
   dmarcFailed,
   findWorkspaceKey,
   isAutomatic,
@@ -46,6 +47,14 @@ describe("inbound addresses", () => {
       "owen@partner.example",
     ]);
     expect(addressesIn(undefined)).toEqual([]);
+  });
+});
+
+describe("cleanText", () => {
+  it("drops control characters Postgres can’t store, keeping line breaks and tabs", () => {
+    expect(cleanText("Broken\u0000 subject\u0007")).toBe("Broken subject");
+    expect(cleanText("Line one\r\n\tLine two")).toBe("Line one\r\n\tLine two");
+    expect(cleanText(undefined)).toBe("");
   });
 });
 
